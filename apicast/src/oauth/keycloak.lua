@@ -12,6 +12,8 @@ local http_ng = require "resty.http_ng"
 local resty_url = require 'resty.url'
 local inspect = require 'inspect'
 
+local jwt = require 'resty.jwt'
+
 local _M = {
   _VERSION = '0.1'
 }
@@ -77,6 +79,17 @@ function _M.token_check_params(params)
     end
   end
   return true
+end
+
+-- Parses the token - in this case we assume it's a JWT token
+-- Here we can extract authenticated user's claims or other information returned in the access_token
+-- or id_token by RH SSO
+function _M.parse_and_verify_token(jwt_token, public_key)
+  local jwt_obj = jwt:verify(public_key, jwt_token)
+  if not jwt_obj.verified then
+    ngx.log(ngx.INFO, "[jwt] failed verification for token: "..jwt_token)
+  end
+  return jwt_obj
 end
 
 function _M.check_client_id(client_id)
@@ -164,17 +177,6 @@ local function parse(config_path)
   return cjson.decode(conf)
 end
 
--- TODO: probably there's a better way to do it, but this doesn't need any external libraries
-local function format_public_key(key)
-  local formatted_key = "-----BEGIN PUBLIC KEY-----\n"
-  local key_len = len(key)
-  for i=1,key_len,64 do
-    formatted_key = formatted_key..string.sub(key, i, i+63).."\n"
-  end
-  formatted_key = formatted_key.."-----END PUBLIC KEY-----"
-  return formatted_key
-end
-
 -- The format of the config file is the following:
 --{
 --  "type": "keycloak",
@@ -210,7 +212,7 @@ function _M.new()
     token_url = resty_url.join(realm_url,'/protocol/openid-connect/token'),
     client_registrations_url = resty_url.join(realm_url,'/clients-registrations/default'),
     initial_access_token = config.initial_access_token,
-    public_key = format_public_key(config.public_key)
+    public_key = util.format_public_key(config.public_key)
   }
 
   local http_client = http_ng.new{

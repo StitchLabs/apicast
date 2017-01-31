@@ -15,6 +15,8 @@ local select = select
 local type = type
 
 local http_authorization = require 'resty.http_authorization'
+local keycloak = require('oauth.keycloak')
+local util = require 'util'
 
 
 local _M = { }
@@ -137,12 +139,13 @@ function backend_version_credentials.version_oauth(config)
   local name = (config.access_token or 'access_token')
   local authorization = http_authorization.new(ngx.var.http_authorization)
   local access_token
+  local app_id
 
   if config.location == 'query' then
     access_token = ngx.var['arg_' .. name] or read_body_args(name)[1]
 
   elseif config.location == 'headers' then
-    access_token = read_http_header(name)
+    access_token = read_http_header(name) or authorization.token
 
   elseif config.location == 'authorization' then
     access_token = authorization.token
@@ -151,16 +154,23 @@ function backend_version_credentials.version_oauth(config)
     return nil, 'invalid credentials location'
   end
 
-  -- https://tools.ietf.org/html/rfc6750#section-2.1 says:
-  -- Resource servers MUST support this method. [Bearer]
-  access_token = access_token or authorization.token
-
+  if keycloak.configured then
+    local jwt_obj = keycloak.parse_and_verify_token(access_token, util.format_public_key(keycloak.configuration.public_key))
+    local app_id = jwt_obj.payload.aud
   ------
-  -- oauth credentials.
+  -- oauth credentials for keycloak
+  -- @field 1 Client id
+  -- @field app_id Client id
+  -- @table credentials_oauth
+    return { app_id = app_id }
+  else
+  ------
+  -- oauth credentials for APIcast oauth
   -- @field 1 Access Token
   -- @field access_token Access Token
   -- @table credentials_oauth
-  return { access_token = access_token }
+  return { access_token = access_token}
+  end
 end
 
 -- This table can be used with `table.concat` to serialize
