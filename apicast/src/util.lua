@@ -22,6 +22,8 @@ end
 
 
 function _M.format_public_key(key)
+  if not key then return nil, 'missing key' end
+  
   local formatted_key = "-----BEGIN PUBLIC KEY-----\n"
   local key_len = len(key)
   for i=1,key_len,64 do
