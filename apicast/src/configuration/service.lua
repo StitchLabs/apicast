@@ -145,7 +145,7 @@ function backend_version_credentials.version_oauth(config)
     access_token = ngx.var['arg_' .. name] or read_body_args(name)[1]
 
   elseif config.location == 'headers' then
-    access_token = read_http_header(name) or authorization.token
+    access_token = read_http_header(name)
 
   elseif config.location == 'authorization' then
     access_token = authorization.token
@@ -153,6 +153,10 @@ function backend_version_credentials.version_oauth(config)
   else
     return nil, 'invalid credentials location'
   end
+
+  -- https://tools.ietf.org/html/rfc6750#section-2.1 says:
+  -- Resource servers MUST support this method. [Bearer]
+  access_token = access_token or authorization.token
 
   if keycloak.configured then
     local jwt_obj = keycloak.parse_and_verify_token(access_token, util.format_public_key(keycloak.configuration.public_key))
