@@ -7,17 +7,18 @@ local sub = string.sub
 
 local util = require 'util'
 local cjson = require 'cjson'
-
 local http_ng = require "resty.http_ng"
 local resty_url = require 'resty.url'
 local inspect = require 'inspect'
-
 local jwt = require 'resty.jwt'
+local resty_env = require 'resty.env'
 
 local _M = {
   _VERSION = '0.1'
 }
-local mt = { __index = _M }
+local mt = { 
+  __index = _M 
+}
 
 -- Required params for each grant type and response type.
 _M.params = {
@@ -31,6 +32,48 @@ _M.params = {
     ['token'] = {'client_id','redirect_uri'}
   }
 }
+
+function _M.init(config)
+  _M.configured = true
+  _M.configuration = config
+end
+
+function _M.new(config, url)
+  local endpoint = url or resty_env.get('RHSSO_ENDPOINT')
+  ngx.log(0, inspect(endpoint))
+  local configuration = config or _M.configuration
+
+  if not configuration then
+    ngx.log(ngx.ERR,'Keycloak is not configured')
+    return nil
+  end
+
+  -- TODO: return an error if some settings are not OK
+
+  local config = configuration
+
+  -- local realm_url = resty_url.join(config.server, '/auth/realms/', config.realm)
+
+  local keycloak_config = {
+    authorize_url = resty_url.join(endpoint,'/protocol/openid-connect/auth'),
+    token_url = resty_url.join(endpoint,'/protocol/openid-connect/token'),
+    client_registrations_url = resty_url.join(endpoint,'/clients-registrations/default'),
+    initial_access_token = config.initial_access_token,
+    public_key = util.format_public_key(config.public_key)
+  }
+
+  local http_client = http_ng.new{
+    backend = configuration.client,
+    options = {
+      ssl = { verify = false }
+    }
+  }
+
+  return setmetatable({
+    config = keycloak_config,
+    http_client = http_client
+    }, mt)
+end
 
 function _M.respond_and_exit(status, body, headers)
   -- TODO: is there a better way to populate the response headers?..
@@ -104,19 +147,18 @@ function _M.authorize(self)
   ok, err = _M.authorize_check_params(params)
 
   if err then
-    _M.repond_with_error(400, err)
+    _M.respond_with_error(400, err)
   end
 
   -- TODO: check client_id at 3scale to see if it's valid, reply with error if it's not
   local client_id = params.client_id
   ok, err = _M.check_client_id(client_id)
   if err then
-    _M.repond_with_error(401, 'invalid_client')
+    _M.respond_with_error(401, 'invalid_client')
   end
 
   -- call Keycloak authorize
-  local args = ngx.var.args and '?'..ngx.var.args or ''
-  local url = resty_url.join(self.config.authorize_url, args)
+  local url = resty_url.join(self.config.authorize_url, ngx.var.is_args, ngx.var.args)
   
   local http_client = self.http_client
   local res = http_client.get(url)
@@ -185,46 +227,5 @@ end
 --  "initial_access_token": "FOR_CLIENT_REGISTRATION",
 --  "public_key": "FOR_VALIDATING_JWT"
 --}
-
-function _M.init(config_path)
-
-  -- TODO: handle reading and parsing errors
-  local config = parse(config_path)
-  _M.configured = true
-  _M.configuration = config
-end
-
-function _M.new()
-
-  if not _M.configured then
-    ngx.log(ngx.ERR,'Keycloak is not configured')
-    return nil
-  end
-
-  -- TODO: return an error if some settings are not OK
-
-  local config = _M.configuration
-
-  local realm_url = resty_url.join(config.server, '/auth/realms/', config.realm)
-
-  local keycloak_config = {
-    authorize_url = resty_url.join(realm_url,'/protocol/openid-connect/auth'),
-    token_url = resty_url.join(realm_url,'/protocol/openid-connect/token'),
-    client_registrations_url = resty_url.join(realm_url,'/clients-registrations/default'),
-    initial_access_token = config.initial_access_token,
-    public_key = util.format_public_key(config.public_key)
-  }
-
-  local http_client = http_ng.new{
-    options = {
-      ssl = { verify = false }
-    }
-  }
-
-  return setmetatable({
-    config = keycloak_config,
-    http_client = http_client
-    }, mt)
-end
 
 return _M
