@@ -20,19 +20,6 @@ function _M.timer(name, fun, ...)
   return unpack(ret)
 end
 
-
-function _M.format_public_key(key)
-  if not key then return nil, 'missing key' end
-  
-  local formatted_key = "-----BEGIN PUBLIC KEY-----\n"
-  local key_len = len(key)
-  for i=1,key_len,64 do
-    formatted_key = formatted_key..string.sub(key, i, i+63).."\n"
-  end
-  formatted_key = formatted_key.."-----END PUBLIC KEY-----"
-  return formatted_key
-end
-
 local function read(file)
   local handle, err = open(file)
   local output
