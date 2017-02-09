@@ -8,7 +8,6 @@ local setmetatable = setmetatable
 local env = require('resty.env')
 local reload_config = env.enabled('APICAST_RELOAD_CONFIG')
 local user_agent = require('user_agent')
-local keycloak = require('oauth.keycloak')
 
 local _M = {
   _VERSION = '3.0.0-pre',
@@ -17,7 +16,6 @@ local _M = {
 
 local missing_configuration = env.get('APICAST_MISSING_CONFIGURATION') or 'log'
 local request_logs = env.enabled('APICAST_REQUEST_LOGS')
-local custom_openid = env.get('OPENID_CONFIG')
 
 local function handle_missing_configuration(err)
   if missing_configuration == 'log' then
@@ -50,11 +48,6 @@ function _M.init()
 
   if not init then
     handle_missing_configuration(err)
-  end
-
-    -- if Keycloak is used for OAuth, load its configuration
-  if custom_openid then
-    keycloak.init(custom_openid)
   end
 end
 
