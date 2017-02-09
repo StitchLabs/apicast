@@ -27,6 +27,7 @@ local dns_resolver = require 'resty.resolver.dns'
 
 local response_codes = env.enabled('APICAST_RESPONSE_CODES')
 local request_logs = env.enabled('APICAST_REQUEST_LOGS')
+local keycloak = env.get('RHSSO_ENDPOINT')
 
 local _M = {
   -- FIXME: this is really bad idea, this file is shared across all requests,
@@ -360,6 +361,16 @@ function _M:access(service)
   ngx.var.secret_token = service.secret_token
 
   local credentials, err = service:extract_credentials()
+
+  if keycloak then
+    k = oauth.new()
+    
+    jwt = k.parse_and_verify_token(credentials.access_token, k.config.public_key)
+    credentials.access_token = nil
+
+    local app_id = jwt.payload.aud
+    credentials.app_id = app_id
+  end
 
   if not credentials or #credentials == 0 then
     if err then
