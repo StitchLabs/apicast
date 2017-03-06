@@ -1,4 +1,0 @@
-# Initial access token for client registrations from RH SSO Instance. You can generate this at https://{RHSSO_HOST}/auth/admin/master/console/#/realms/{YOUR_REALM}/client-initial-access
-RHSSO_ACCESS_TOKEN={YOUR_INITIAL_ACCESS_TOKEN}
-
-#

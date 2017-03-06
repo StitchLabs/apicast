@@ -1,8 +1,11 @@
-local redis_pool = require 'redis_pool'
+local redis_pool = require 'client-registrations/redis_pool'
 local lom = require 'lxp.lom'
 local xpath = require 'luaxpath'
+local cjson = require 'cjson'
 
 local _M = {}
+
+local initial_access_token = "CHANGE_ME_INITIAL_ACCESS_TOKEN"
 
 -- this will be the prepended to the keys for storing in Redis the registration access token
 local access_token_prefix = "access-token#"
@@ -58,8 +61,8 @@ local function client_registration_request(method, client_details)
 end
 
 local function register_client(client_details)
-  ngx.var.access_token = rhsso.initial_access_token
-  ngx.var.registration_url = rhsso.client_registrations_url
+  ngx.var.access_token = initial_access_token
+  ngx.var.registration_url = ngx.var.rhsso_endpoint.."/clients-registrations/default" 
   local method = ngx.HTTP_POST
   client_registration_request(method, client_details)
 end
@@ -67,7 +70,7 @@ end
 local function update_client(client_details)
   local client_id = client_details.client_id
   ngx.var.access_token = get_access_token(client_id)
-  ngx.var.registration_url = rhsso.client_registrations_url..'/'..client_id
+  ngx.var.registration_url = ngx.var.rhsso_endpoint..'/clients-registrations/default/'..client_id
   local method = ngx.HTTP_PUT
   client_registration_request(method, client_details)
 end
