@@ -58,7 +58,7 @@ function _M.new(config)
 
   if not is_valid then
     ngx.log(ngx.ERR,'Keycloak is not configured')
-    return nil
+    return error('missing keycloak configuration')
   end
 
   local keycloak_config = {
@@ -145,16 +145,22 @@ function _M.parse_and_verify_token(jwt_token, public_key)
 end
 
 function _M.check_credentials(params)
-  local res = ngx.location.capture("/_threescale/check_credentials",
-    {
-      args = {
+  local http = {
+    get = function(url, args)
+      local backend_upstream = ngx.ctx.backend_upstream
+      local res = ngx.location.capture(assert(url), { args = args, share_all_vars = true, ctx = { backend_upstream = backend_upstream } })
+      return res
+    end
+  }
+
+  local args = {
         app_id = params.client_id,
         app_key = params.client_secret,
         redirect_uri = params.redirect_uri
-      },
-      copy_all_vars = true,
-      ctx = ngx.ctx
-    })
+      }
+
+  local res = http.get("/_threescale/check_credentials", args)
+
   return res.status == 200
 end
 
@@ -166,11 +172,13 @@ function _M.authorize(self)
 
   if err then
     _M.respond_with_error(400, err)
+    return
   end
 
   ok, err = _M.check_credentials(params)
   if err then
     _M.respond_with_error(401, 'invalid_client')
+    return 
   end
 
   local url = resty_url.join(self.config.authorize_url, ngx.var.is_args, ngx.var.args)
@@ -195,11 +203,13 @@ function _M.get_token(self)
   ok, err = _M.token_check_params(req_body)
   if err then
     _M.respond_with_error(400, err)
+    return
   end
 
    ok, err = _M.check_credentials(req_body)
   if err then
     _M.respond_with_error(401, 'invalid_client')
+    return
   end
 
   -- call Keycloak authorize
