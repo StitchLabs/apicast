@@ -16,21 +16,21 @@ describe('Keycloak', function()
          assert.equals('http://www.example.com:80/auth/realms/test/protocol/openid-connect/token', keycloak.config.token_url)
     end)
 
-    it('works with nil public_key', function()
-      local keycloak = assert(_M.new({endpoint = 'http://www.example.com:80/auth/realms/test', public_key = nil }))
-      assert.equals(nil, keycloak.config.public_key)
+    it('fails with nil public_key', function()
+      assert.has_error(function () _M.new({endpoint = 'http://www.example.com:80/auth/realms/test', public_key = nil }) end, "missing keycloak configuration" )
     end)
 
-    -- TODO: Check correct error written to logs
-    it('works with nil endpoint', function()
-      assert.equals(nil, _M.new())
+    it('fails with nil endpoint', function()
+      assert.has_error(function () _M.new({endpoint = nil, public_key = 'foobar' }) end, "missing keycloak configuration" )
     end)
   end)
 
   describe('.authorize', function()
 
     it('connects to keycloak', function()
-        local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', client = test_backend })
+        local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar', client = test_backend })
+
+        stub(ngx.location, 'capture', function () return { status = 200 } end )
 
         ngx.var = { is_args = "?", args = "client_id=foo" }
         stub(ngx.req, 'get_uri_args', function() return { response_type = 'code', client_id = 'foo', redirect_uri = 'bar' } end)
@@ -45,19 +45,24 @@ describe('Keycloak', function()
     end)
 
     it('returns error when response_type missing', function()
-      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', client = test_backend })
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar', client = test_backend })
+
+      stub(ngx.location, 'capture', function () return { status = 200 } end )
 
       ngx.var = { is_args = "?", args = "" }
       stub(ngx.req, 'get_uri_args', function() return { client_id = 'foo', redirect_uri = 'bar' } end)
 
+      stub(_M, 'respond_with_error')
       keycloak:authorize()
-      assert.spy(_M.respond_and_exit).was.called_with(400, 'invalid_request')
+      assert.spy(_M.respond_with_error).was.called_with(400, 'invalid_request')
     end)
   end)
 
   describe('.get_token', function()
     it('connects to keycloak', function()
-      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', client = test_backend })
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar', client = test_backend })
+
+      stub(ngx.location, 'capture', function () return { status = 200 } end )
 
       ngx.var = { is_args = "?", args = "client_id=foo" }
       stub(ngx.req, 'read_body', function() return { } end)
