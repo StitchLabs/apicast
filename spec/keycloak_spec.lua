@@ -30,7 +30,7 @@ describe('Keycloak', function()
     it('connects to keycloak', function()
         local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar', client = test_backend })
 
-        stub(ngx.location, 'capture', function () return { status = 200 } end )
+        stub(_M, 'check_credentials', function () return true end)
 
         ngx.var = { is_args = "?", args = "client_id=foo" }
         stub(ngx.req, 'get_uri_args', function() return { response_type = 'code', client_id = 'foo', redirect_uri = 'bar' } end)
@@ -45,9 +45,9 @@ describe('Keycloak', function()
     end)
 
     it('returns error when response_type missing', function()
-      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar', client = test_backend })
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar'})
 
-      stub(ngx.location, 'capture', function () return { status = 200 } end )
+      stub(_M, 'check_credentials', function () return true end)
 
       ngx.var = { is_args = "?", args = "" }
       stub(ngx.req, 'get_uri_args', function() return { client_id = 'foo', redirect_uri = 'bar' } end)
@@ -55,6 +55,18 @@ describe('Keycloak', function()
       stub(_M, 'respond_with_error')
       keycloak:authorize()
       assert.spy(_M.respond_with_error).was.called_with(400, 'invalid_request')
+    end)
+
+    it('returns error when credentials are wrong', function ()
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/reams/test', public_key = 'foobar'})
+
+      stub(_M, 'check_credentials', function () return false end)
+
+      stub(ngx.req, 'get_uri_args', function() return { response_type = 'code', client_id = 'foo', redirect_uri = 'bar' } end)
+
+      stub(_M, 'respond_with_error')
+      keycloak:authorize()
+      assert.spy(_M.respond_with_error).was.called_with(401, 'invalid_client')
     end)
   end)
 
@@ -74,6 +86,56 @@ describe('Keycloak', function()
       stub(_M, 'respond_and_exit')
       keycloak:get_token()
       assert.spy(_M.respond_and_exit).was.called_with(200, 'foo', {})
+    end)
+
+    it('returns "invalid_request" when grant_type missing', function ()
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar'})
+
+      ngx.var = { is_args = "?", args = "client_id=foo" }
+      stub(ngx.req, 'read_body', function() return { } end)
+      stub(ngx.req, 'get_post_args', function() return { client_id = 'foo', redirect_uri = 'bar', code = 'baz'} end)
+
+      stub(_M, 'respond_with_error')
+      keycloak:get_token()
+      assert.spy(_M.respond_with_error).was.called_with(400, 'invalid_request')
+    end)
+
+    it('returns "unsupported_grant_type" when grant_type not "recognised"', function ()
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar'})
+
+      ngx.var = { is_args = "?", args = "client_id=foo" }
+      stub(ngx.req, 'read_body', function() return { } end)
+      stub(ngx.req, 'get_post_args', function() return { grant_type = 'foo' } end)
+
+      stub(_M, 'respond_with_error')
+      keycloak:get_token()
+      assert.spy(_M.respond_with_error).was.called_with(400, 'unsupported_grant_type')
+    end)
+
+    it('returns "invalid_request" when required params not sent', function ()
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar'})
+
+      ngx.var = { is_args = "?", args = "client_id=foo" }
+      stub(ngx.req, 'read_body', function() return { } end)
+      stub(ngx.req, 'get_post_args', function() return { grant_type = 'authorization_code' } end)
+
+      stub(_M, 'respond_with_error')
+      keycloak:get_token()
+      assert.spy(_M.respond_with_error).was.called_with(400, 'invalid_request')
+    end)
+
+    it('returns "invalid_client" when credentials are wrong', function ()
+      local keycloak = _M.new({ endpoint = 'http://www.example.com:80/auth/realms/test', public_key = 'foobar'})
+
+      stub(_M, 'check_credentials', function () return false end)
+
+      ngx.var = { is_args = "?", args = "client_id=foo" }
+      stub(ngx.req, 'read_body', function() return { } end)
+      stub(ngx.req, 'get_post_args', function() return { grant_type = 'authorization_code', client_id = 'foo', redirect_uri = 'bar', code = 'baz'} end)
+
+      stub(_M, 'respond_with_error')
+      keycloak:get_token()
+      assert.spy(_M.respond_with_error).was.called_with(401, 'invalid_client')
     end)
   end)
 end)
