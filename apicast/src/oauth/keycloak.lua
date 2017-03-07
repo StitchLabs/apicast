@@ -165,24 +165,28 @@ function _M.check_credentials(params)
 end
 
 function _M.authorize(self)
-
   local ok, err
-  local params = ngx.req.get_uri_args()
-  ok, err = _M.authorize_check_params(params)
+  local http_client = self.http_client
 
-  if err then
+  if not http_client then
+    return nil, 'not initialized'
+  end
+
+  local params = ngx.req.get_uri_args()
+
+  ok, err = _M.authorize_check_params(params)
+  if not ok then
     _M.respond_with_error(400, err)
     return
   end
 
-  ok, err = _M.check_credentials(params)
-  if err then
+  ok = _M.check_credentials(params)
+  if not ok then
     _M.respond_with_error(401, 'invalid_client')
-    return 
+    return
   end
 
   local url = resty_url.join(self.config.authorize_url, ngx.var.is_args, ngx.var.args)
-  local http_client = self.http_client
   local res = http_client.get(url)
 
   _M.respond_and_exit(res.status, res.body, res.headers)
@@ -201,13 +205,13 @@ function _M.get_token(self)
   local req_body = ngx.req.get_post_args()
 
   ok, err = _M.token_check_params(req_body)
-  if err then
+  if not ok then
     _M.respond_with_error(400, err)
     return
   end
 
-   ok, err = _M.check_credentials(req_body)
-  if err then
+  ok = _M.check_credentials(req_body)
+  if not ok then
     _M.respond_with_error(401, 'invalid_client')
     return
   end
